@@ -1,0 +1,92 @@
+@startuml 蜜罐自动防御系统用例图
+
+skinparam backgroundColor #FEFEFE
+skinparam usecase {
+  BackgroundColor #E1F5FE
+  BorderColor #01579B
+  FontColor #000000
+}
+skinparam actor {
+  BackgroundColor #FFF9C4
+  BorderColor #F57F17
+}
+
+actor 攻击者 as attacker
+actor 管理员 as admin
+rectangle 蜜罐自动防御系统 {
+  
+  ' 攻击者用例
+  usecase "发起SSH爆破" as ssh_brute
+  usecase "发起HTTP扫描" as http_scan
+  usecase "发起恶意请求" as malicious_req
+  
+  ' 系统核心流程
+  usecase "事件采集" as event_capture
+  usecase "事件入库" as event_store
+  usecase "异常检测" as anomaly_detection
+  usecase "自动生成告警" as alert_generation
+  usecase "自动创建封禁" as block_creation
+  usecase "同步封禁策略" as policy_sync
+  usecase "更新防火墙规则" as firewall_update
+  usecase "IP自动过期解封" as auto_unblock
+  
+  ' 管理员查询用例
+  usecase "查看事件数据" as view_events
+  usecase "查看告警信息" as view_alerts
+  usecase "查看攻击者画像" as view_attacker_profile
+  usecase "查看封禁记录" as view_block_records
+  usecase "查看审计日志" as view_audit_logs
+  
+  ' 管理员管理用例
+  usecase "管理告警" as manage_alerts
+  usecase "配置白名单" as configure_whitelist
+  usecase "手动解封IP" as manual_unblock
+  usecase "修改检测阈值" as modify_threshold
+  
+  ' 攻击者关联
+  attacker --> ssh_brute
+  attacker --> http_scan
+  attacker --> malicious_req
+  
+  ' 攻击触发采集
+  ssh_brute --> event_capture
+  http_scan --> event_capture
+  malicious_req --> event_capture
+  
+  ' 核心流程链
+  event_capture --> event_store
+  event_store --> anomaly_detection
+  anomaly_detection --> alert_generation
+  alert_generation --> block_creation
+  block_creation --> policy_sync
+  policy_sync --> firewall_update
+  firewall_update --> auto_unblock
+  
+  ' 管理员查询
+  admin --> view_events
+  admin --> view_alerts
+  admin --> view_attacker_profile
+  admin --> view_block_records
+  admin --> view_audit_logs
+  
+  ' 管理员管理
+  admin --> manage_alerts
+  admin --> configure_whitelist
+  admin --> manual_unblock
+  admin --> modify_threshold
+  
+  ' 数据流关联
+  event_store -.-> view_events
+  alert_generation -.-> view_alerts
+  block_creation -.-> view_block_records
+  event_capture -.-> view_attacker_profile
+  policy_sync -.-> view_audit_logs
+  
+  ' 管理员影响系统
+  configure_whitelist -.-> firewall_update
+  manual_unblock -.-> firewall_update
+  modify_threshold -.-> anomaly_detection
+  manage_alerts -.-> alert_generation
+}
+
+@enduml
