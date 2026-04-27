@@ -1,0 +1,133 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: honeypot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - core_net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - core_net
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@postgres:5432/honeypot
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_URL: redis://redis:6379/2
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      JWT_SECRET: dev-secret-change-me
+      JWT_EXPIRE_MINUTES: "720"
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8000:8000"
+    networks:
+      - core_net
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@postgres:5432/honeypot
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_URL: redis://redis:6379/2
+    depends_on:
+      - redis
+      - postgres
+    command: ["bash", "-lc", "celery -A backend.app.core.celery_app.celery_app worker -l info"]
+    networks:
+      - core_net
+
+  beat:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@postgres:5432/honeypot
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_URL: redis://redis:6379/2
+    depends_on:
+      - redis
+      - worker
+    command: ["bash", "-lc", "celery -A backend.app.core.celery_app.celery_app beat -l info"]
+    networks:
+      - core_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_BASE: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - core_net
+
+  honeypot-http:
+    build:
+      context: ./honeypot-http
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_URL: http://backend:8000
+      HONEYPOT_INSTANCE_ID: hp-http-1
+    networks:
+      - core_net
+
+  cowrie:
+    image: cowrie/cowrie:latest
+    networks:
+      - core_net
+
+  blocker:
+    build:
+      context: ./blocker
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_URL: http://backend:8000
+      HTTP_UPSTREAM: http://honeypot-http:8001
+      BAN_SYNC_INTERVAL_SEC: "10"
+      SETTINGS_REFRESH_SEC: "60"
+
+      # Make whitelist configurable (for local testing)
+      WHITELIST_CSV: "127.0.0.1,172.16.0.0/12,192.168.0.0/16"
+      DISABLE_SETTINGS_FETCH: "1"
+    ports:
+      - "80:80"
+      - "2222:2222"
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - backend
+      - honeypot-http
+      - cowrie
+    networks:
+      - core_net
+
+volumes:
+  pgdata:
+
+networks:
+  core_net:
+    driver: bridge

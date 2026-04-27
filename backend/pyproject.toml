@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "honeypot-backend"
+version = "0.1.0"
+description = "Honeypot platform backend"
+authors = ["you <you@example.com>"]
+# 删掉这行（或改成 true）
+# package-mode = false
+
+# 告诉 Poetry 要安装哪个包（你的代码目录是 app）
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.30.0"}
+sqlalchemy = "^2.0.30"
+pydantic = "^2.8.2"
+pydantic-settings = "^2.4.0"
+python-jose = "^3.3.0"
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+celery = "^5.4.0"
+redis = "^5.0.8"
+alembic = "^1.13.2"
+psycopg = {version = "3.2.1", extras = ["binary"]}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
