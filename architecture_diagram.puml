@@ -1,0 +1,176 @@
+@startuml 蜜罐自动防御系统分层架构
+
+!define BGCOLOR_UI #E3F2FD
+!define BGCOLOR_SERVICE #FFF3E0
+!define BGCOLOR_QUEUE #F3E5F5
+!define BGCOLOR_DATA #E8F5E9
+!define BGCOLOR_HONEYPOT #FCE4EC
+!define BGCOLOR_FIREWALL #FFEBEE
+
+skinparam backgroundColor #FAFAFA
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor #424242
+  FontColor #212121
+}
+skinparam database {
+  BackgroundColor #E8F5E9
+  BorderColor #1B5E20
+  FontColor #212121
+}
+
+rectangle "前端展示层 | Frontend Layer" #E3F2FD {
+  component [Vue 3 管理平台] as vue
+  component [事件监控仪表板] as dashboard
+  component [Vite 构建工具] as vite
+  
+  vue --> dashboard
+  vite --> vue
+}
+
+rectangle "后端服务层 | Backend Service Layer" #FFF3E0 {
+  component [FastAPI 核心应用] as fastapi
+  component [事件接收接口\n/api/events] as event_api
+  component [告警查询接口\n/api/alerts] as alert_api
+  component [封禁管理接口\n/api/blocks] as block_api
+  component [白名单接口\n/api/whitelist] as whitelist_api
+  component [用户认证模块] as auth
+  
+  fastapi --> event_api
+  fastapi --> alert_api
+  fastapi --> block_api
+  fastapi --> whitelist_api
+  auth -.-> fastapi
+}
+
+rectangle "异步任务调度层 | Async Task Layer" #F3E5F5 {
+  component [Redis 消息队列] as redis
+  component [Celery Worker\n检测引擎] as celery_worker
+  component [Celery Beat\n定时任务] as celery_beat
+  component [特征提取模块] as feature_extract
+  component [规则检测模块] as rule_detect
+  component [统计分析模块] as stat_analyze
+  component [自适应评分模块] as adaptive_score
+  
+  redis --> celery_worker
+  celery_beat --> redis
+  celery_worker --> feature_extract
+  feature_extract --> rule_detect
+  rule_detect --> stat_analyze
+  stat_analyze --> adaptive_score
+}
+
+rectangle "数据持久化层 | Data Persistence Layer" #E8F5E9 {
+  database [PostgreSQL 关系数据库] as pg
+  
+  component [事件表\n(Event)] as event_table
+  component [告警表\n(Alert)] as alert_table
+  component [封禁记录表\n(BlockRecord)] as block_table
+  component [攻击者画像表\n(AttackerProfile)] as profile_table
+  component [白名单表\n(Whitelist)] as whitelist_table
+  component [审计日志表\n(AuditLog)] as audit_table
+  
+  pg --> event_table
+  pg --> alert_table
+  pg --> block_table
+  pg --> profile_table
+  pg --> whitelist_table
+  pg --> audit_table
+}
+
+rectangle "蜜罐诱捕层 | Honeypot Layer" #FCE4EC {
+  component [HTTP 高交互蜜罐] as http_honeypot
+  component [Cowrie SSH 蜜罐] as ssh_honeypot
+  component [事件标准化模块] as normalize
+  
+  http_honeypot --> normalize
+  ssh_honeypot --> normalize
+}
+
+rectangle "流量封禁网关层 | Traffic Blocking Layer" #FFEBEE {
+  component [Blocker 容器] as blocker
+  component [ipset IP集合管理] as ipset
+  component [iptables 防火墙规则] as iptables
+  component [Linux 内核网络栈] as kernel
+  
+  blocker --> ipset
+  ipset --> iptables
+  iptables --> kernel
+}
+
+' 跨层数据流
+vue ==HTTP==> fastapi : 管理员界面交互\n(用户请求/响应)
+
+event_api ==HTTP/JSON==> normalize : 蜜罐上报数据\n(事件采集)
+
+fastapi ==查询/写入==> pg : SQL操作\n(数据持久化)
+
+fastapi --> redis : 发送检测任务\n(内部网络)
+
+adaptive_score --> alert_table : 生成告警\n(内部网络)
+
+adaptive_score --> block_api : 触发封禁\n(内部网络)
+
+block_api --> blocker : 周期同步\n(TCP/内部网络)
+
+blocker ==更新防火墙==> kernel : 执行拦截\n(系统调用)
+
+alert_api ==查询==> alert_table : 管理员查看告警\n(内部网络)
+
+block_api ==查询==> block_table : 管理员管理封禁\n(内部网络)
+
+dashboard -.HTTP.- alert_api : 实时告警推送\n(WebSocket)
+
+whitelist_api --> whitelist_table : 白名单配置\n(内部网络)
+
+kernel -.->|丢弃恶意流量| http_honeypot : 拦截黑名单IP\n(内核过滤)
+
+note right of vue
+  Vite + Vue3 构建
+  响应式界面设计
+  实时数据展示
+end note
+
+note right of fastapi
+  异步I/O处理
+  权限认证与授权
+  请求校验与转发
+end note
+
+note right of redis
+  消息队列
+  缓存管理
+  会话存储
+end note
+
+note right of celery_worker
+  无监督检测
+  多维度风险评分
+  自动告警生成
+end note
+
+note right of pg
+  事件完整存储
+  高频查询索引
+  关系型数据模型
+end note
+
+note right of http_honeypot
+  FastAPI 高交互
+  全路径捕获
+  请求头/载荷记录
+end note
+
+note right of ssh_honeypot
+  Cowrie 框架
+  爆破行为模拟
+  命令执行记录
+end note
+
+note right of blocker
+  定时轮询拉取
+  ipset 批量管理
+  iptables 规则下发
+end note
+
+@enduml
